@@ -5,7 +5,7 @@ module QuadTree exposing
     , insert, insertMany
     , remove
     , update
-    , findItems, findIntersecting, toArray
+    , findItems, findIntersecting, toArray, toList
     , apply, applySafe, map, mapSafe
     , reset
     )
@@ -45,7 +45,7 @@ module QuadTree exposing
 
 # Querying
 
-@docs findItems, findIntersecting, toArray
+@docs findItems, findIntersecting, toArray, toList
 
 
 # Applying functions
@@ -313,6 +313,13 @@ toArray quadTree =
                 |> Array.append (toArray quadTreeNW)
                 |> Array.append (toArray quadTreeSW)
                 |> Array.append (toArray quadTreeSE)
+
+
+{-| Get all items from a quadTree. Conserves duplicates.
+-}
+toList : QuadTree units coordinates a -> List a
+toList =
+    toArray >> Array.toList
 
 
 {-| Reset a quadTree. This function gets all items
