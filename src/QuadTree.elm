@@ -1,6 +1,6 @@
 module QuadTree
     exposing
-        ( QuadTree(..)
+        ( QuadTree
         , Bounded
         , BoundingBox
         , boundingBox
@@ -10,7 +10,7 @@ module QuadTree
         , halfHeight
         , center
         , intersectBoundingBoxes
-        , emptyQuadTree
+        , init
         , length
         , insert
         , insertMany
@@ -43,7 +43,7 @@ module QuadTree
 
 # QuadTree
 
-@docs QuadTree, emptyQuadTree
+@docs Quadtree, init
 
 
 # Properties
@@ -272,8 +272,8 @@ type QuadTree a
 a maxSize. The maxSize limits the number of elements
 that each leaf of the QuadTree can hold.
 -}
-emptyQuadTree : BoundingBox -> Int -> QuadTree a
-emptyQuadTree theBoundingBox maxSize =
+init : BoundingBox -> Int -> QuadTree a
+init theBoundingBox maxSize =
     Leaf theBoundingBox maxSize Array.empty
 
 
@@ -307,7 +307,7 @@ insert item quadTree =
 
                     insertNew quadrant =
                         Array.foldr (\i qt -> insert i qt)
-                            (emptyQuadTree quadrant maxSize)
+                            (init quadrant maxSize)
                             allItems
 
                     quadTreeNE =
@@ -445,7 +445,7 @@ leaves.
 reset : QuadTree (Bounded a) -> QuadTree (Bounded a)
 reset quadTree =
     insertMany (getAllItems quadTree)
-        (emptyQuadTree (getBoundingBox quadTree) (getMaxSize quadTree))
+        (init (getBoundingBox quadTree) (getMaxSize quadTree))
 
 
 {-| Find all items in the quadTree which share a leaf with the given

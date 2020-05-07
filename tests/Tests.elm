@@ -3,7 +3,7 @@ module Tests exposing (..)
 import Array
 import Expect
 import Test exposing (Test, describe, test)
-import QuadTree exposing (boundingBox, emptyQuadTree, findIntersecting, findItems, getAllItems, insert, insertMany, intersectBoundingBoxes, length)
+import QuadTree exposing (boundingBox, init, findIntersecting, findItems, getAllItems, insert, insertMany, intersectBoundingBoxes, length)
 
 
 toIntervalTest ( ( low1, high1 ), ( low2, high2 ), expected ) =
@@ -87,7 +87,7 @@ quadTreeInsertTest =
             \() ->
                 let
                     tree =
-                        emptyQuadTree treeLimits 4
+                        init treeLimits 4
 
                     bounded =
                         { boundingBox = boundingBox 0 1 0 1 }
@@ -97,7 +97,7 @@ quadTreeInsertTest =
             \() ->
                 let
                     tree =
-                        emptyQuadTree treeLimits 4
+                        init treeLimits 4
 
                     bounded =
                         { boundingBox = boundingBox 0 1 0 1 }
@@ -110,7 +110,7 @@ quadTreeInsertTest =
             \() ->
                 let
                     tree =
-                        emptyQuadTree treeLimits 4
+                        init treeLimits 4
 
                     boundeds =
                         [ { boundingBox = boundingBox 0 1 0 1 }
@@ -137,7 +137,7 @@ treeLookupTest =
             \() ->
                 let
                     tree =
-                        emptyQuadTree treeLimits 4
+                        init treeLimits 4
 
                     bounded =
                         { boundingBox = boundingBox 0 1 0 1 }
@@ -153,7 +153,7 @@ treeLookupTest =
             \() ->
                 let
                     tree =
-                        emptyQuadTree treeLimits 4
+                        init treeLimits 4
 
                     items =
                         [ boundedItem 0 1 0 1
