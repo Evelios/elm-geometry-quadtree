@@ -5,7 +5,7 @@ module QuadTree exposing
     , insert, insertMany
     , remove
     , update
-    , findItems, findIntersecting, getAllItems
+    , findItems, findIntersecting, toArray
     , apply, applySafe, map, mapSafe
     , reset
     )
@@ -45,7 +45,7 @@ module QuadTree exposing
 
 # Querying
 
-@docs findItems, findIntersecting, getAllItems
+@docs findItems, findIntersecting, toArray
 
 
 # Applying functions
@@ -302,17 +302,17 @@ getMaxSize quadTree =
 
 {-| Get all items from a quadTree. Conserves duplicates.
 -}
-getAllItems : QuadTree units coordinates a -> Array.Array a
-getAllItems quadTree =
+toArray : QuadTree units coordinates a -> Array.Array a
+toArray quadTree =
     case quadTree of
         Leaf _ _ items ->
             items
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            getAllItems quadTreeNE
-                |> Array.append (getAllItems quadTreeNW)
-                |> Array.append (getAllItems quadTreeSW)
-                |> Array.append (getAllItems quadTreeSE)
+            toArray quadTreeNE
+                |> Array.append (toArray quadTreeNW)
+                |> Array.append (toArray quadTreeSW)
+                |> Array.append (toArray quadTreeSE)
 
 
 {-| Reset a quadTree. This function gets all items
@@ -325,7 +325,7 @@ reset :
     QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
 reset quadTree =
-    insertMany (getAllItems quadTree)
+    insertMany (toArray quadTree)
         (init (getBoundingBox quadTree) (getMaxSize quadTree))
 
 

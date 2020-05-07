@@ -9,11 +9,11 @@ import QuadTree
         ( Bounded
         , findIntersecting
         , findItems
-        , getAllItems
         , init
         , insert
         , insertMany
         , length
+        , toArray
         )
 import Quantity exposing (Unitless)
 import Test exposing (Test, describe, test)
@@ -60,7 +60,7 @@ quadTreeInsertTest =
                     treeWithElements =
                         insert bounded tree
                 in
-                Expect.equalLists (Array.toList <| getAllItems treeWithElements) [ bounded ]
+                Expect.equalLists (Array.toList <| toArray treeWithElements) [ bounded ]
         , test "Add multiple items" <|
             \() ->
                 let
@@ -77,7 +77,7 @@ quadTreeInsertTest =
                     testTree =
                         List.foldl insert tree boundeds
                 in
-                Expect.equalLists (Array.toList <| getAllItems testTree) boundeds
+                Expect.equalLists (Array.toList <| toArray testTree) boundeds
         ]
 
 
