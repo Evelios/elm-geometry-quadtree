@@ -1,49 +1,26 @@
-module QuadTree
-    exposing
-        ( QuadTree
-        , Bounded
-        , BoundingBox
-        , boundingBox
-        , width
-        , height
-        , halfWidth
-        , halfHeight
-        , center
-        , intersectBoundingBoxes
-        , init
-        , length
-        , insert
-        , insertMany
-        , remove
-        , update
-        , getBoundingBox
-        , getMaxSize
-        , getAllItems
-        , reset
-        , findItems
-        , findIntersecting
-        , apply
-        , applySafe
-        , map
-        , mapSafe
-        )
+module QuadTree exposing
+    ( QuadTree, init
+    , Bounded
+    , getMaxSize, getBoundingBox, length
+    , insert, insertMany
+    , remove
+    , update
+    , findItems, findIntersecting, getAllItems
+    , apply, applySafe, map, mapSafe
+    , reset
+    )
 
 {-| QuadTree implementation in Elm.
 
 
-# Bounding Boxes
-
-@docs BoundingBox, boundingBox, intersectBoundingBoxes, width, height, halfWidth, halfHeight, center
-
-
-# Bounded Extensible Type
-
-@docs Bounded
-
-
 # QuadTree
 
-@docs Quadtree, init
+@docs QuadTree, init
+
+
+# Bounding Boxes
+
+@docs Bounded
 
 
 # Properties
@@ -83,6 +60,8 @@ module QuadTree
 -}
 
 import Array
+import BoundingBox2d exposing (BoundingBox2d)
+import Point2d
 
 
 dropIf : (a -> Bool) -> Array.Array a -> Array.Array a
@@ -96,7 +75,7 @@ flippedMap f array =
         g y x =
             f x y
     in
-        Array.map (g array) array
+    Array.map (g array) array
 
 
 loop : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> b
@@ -104,6 +83,7 @@ loop start condition updateFn return =
     case condition start of
         True ->
             return start
+
         False ->
             loop (updateFn start) condition updateFn return
 
@@ -112,137 +92,32 @@ loop start condition updateFn return =
 --------
 
 
-type alias Interval =
-    { low : Float
-    , high : Float
+type alias Quadrants units coordinates =
+    { northEast : BoundingBox2d units coordinates
+    , northWest : BoundingBox2d units coordinates
+    , southEast : BoundingBox2d units coordinates
+    , southWest : BoundingBox2d units coordinates
     }
 
 
-pointInInterval : Float -> Interval -> Bool
-pointInInterval point interval =
-    point < interval.high && point > interval.low
+quadrants : BoundingBox2d units coordinates -> Quadrants units coordinates
+quadrants box =
+    let
+        { minX, maxX, minY, maxY } =
+            BoundingBox2d.extrema box
 
-
-intersectIntervals : Interval -> Interval -> Bool
-intersectIntervals interval1 interval2 =
-    pointInInterval interval1.low interval2
-        || pointInInterval interval1.high interval2
-        || (interval1.low <= interval2.low && interval1.high >= interval2.high)
-
-
-
---------
-
-
-{-| Represents the bounds of some shape
--}
-type alias BoundingBox =
-    { horizontal : Interval
-    , vertical : Interval
+        extrema =
+            { ne = Point2d.xy minX maxY
+            , nw = Point2d.xy maxX maxY
+            , sw = Point2d.xy maxX minY
+            , se = Point2d.xy minX minY
+            }
+    in
+    { northEast = BoundingBox2d.scaleAbout extrema.ne 0.5 box
+    , northWest = BoundingBox2d.scaleAbout extrema.nw 0.5 box
+    , southEast = BoundingBox2d.scaleAbout extrema.se 0.5 box
+    , southWest = BoundingBox2d.scaleAbout extrema.sw 0.5 box
     }
-
-
-{-| Function to determine if two bounding boxes intersect.
--}
-intersectBoundingBoxes : BoundingBox -> BoundingBox -> Bool
-intersectBoundingBoxes box1 box2 =
-    intersectIntervals box1.horizontal box2.horizontal
-        && intersectIntervals box1.vertical box2.vertical
-
-
-{-| Construct a bounding box.
-
-    boundingBox minX maxX minY maxY
-
--}
-boundingBox : Float -> Float -> Float -> Float -> BoundingBox
-boundingBox minX maxX minY maxY =
-    BoundingBox (Interval minX maxX) (Interval minY maxY)
-
-
-{-| Get the width of a bounding box.
--}
-width : BoundingBox -> Float
-width box =
-    box.horizontal.high - box.horizontal.low
-
-
-{-| Get the height of a bounding box.
--}
-height : BoundingBox -> Float
-height box =
-    box.vertical.high - box.vertical.low
-
-
-{-| Get the half-width of a bounding box.
--}
-halfWidth : BoundingBox -> Float
-halfWidth box =
-    width box / 2
-
-
-{-| Get the half-height of a bounding box.
--}
-halfHeight : BoundingBox -> Float
-halfHeight box =
-    height box / 2
-
-
-{-| Get the center of a bounding box.
--}
-center : BoundingBox -> { x : Float, y : Float }
-center box =
-    { x = box.horizontal.low + halfWidth box
-    , y = box.vertical.low + halfHeight box
-    }
-
-
-subdivideNE : BoundingBox -> BoundingBox
-subdivideNE box =
-    let
-        minX =
-            box.horizontal.low + halfWidth box
-
-        minY =
-            box.vertical.low + halfHeight box
-    in
-        boundingBox minX box.horizontal.high minY box.vertical.high
-
-
-subdivideNW : BoundingBox -> BoundingBox
-subdivideNW box =
-    let
-        maxX =
-            box.horizontal.high - halfWidth box
-
-        minY =
-            box.vertical.low + halfHeight box
-    in
-        boundingBox box.horizontal.low maxX minY box.vertical.high
-
-
-subdivideSW : BoundingBox -> BoundingBox
-subdivideSW box =
-    let
-        maxX =
-            box.horizontal.high - halfWidth box
-
-        maxY =
-            box.vertical.high - halfHeight box
-    in
-        boundingBox box.horizontal.low maxX box.vertical.low maxY
-
-
-subdivideSE : BoundingBox -> BoundingBox
-subdivideSE box =
-    let
-        minX =
-            box.horizontal.low + halfWidth box
-
-        maxY =
-            box.vertical.high - halfHeight box
-    in
-        boundingBox minX box.horizontal.high box.vertical.low maxY
 
 
 
@@ -251,8 +126,8 @@ subdivideSE box =
 
 {-| Extend this record type in order to use the QuadTree.
 -}
-type alias Bounded a =
-    { a | boundingBox : BoundingBox }
+type alias Bounded units coordinates a =
+    { a | boundingBox : BoundingBox2d units coordinates }
 
 
 
@@ -263,16 +138,16 @@ type alias Bounded a =
 keeps track of the maximum number of items that
 can be inserted in each leaf.
 -}
-type QuadTree a
-    = Leaf BoundingBox Int (Array.Array a)
-    | Node BoundingBox (QuadTree a) (QuadTree a) (QuadTree a) (QuadTree a)
+type QuadTree units coordinates a
+    = Leaf (BoundingBox2d units coordinates) Int (Array.Array a)
+    | Node (BoundingBox2d units coordinates) (QuadTree units coordinates a) (QuadTree units coordinates a) (QuadTree units coordinates a) (QuadTree units coordinates a)
 
 
 {-| Construct an empty QuadTree given a bounding box and
 a maxSize. The maxSize limits the number of elements
 that each leaf of the QuadTree can hold.
 -}
-init : BoundingBox -> Int -> QuadTree a
+init : BoundingBox2d units coordinates -> Int -> QuadTree units coordinates a
 init theBoundingBox maxSize =
     Leaf theBoundingBox maxSize Array.empty
 
@@ -281,7 +156,7 @@ init theBoundingBox maxSize =
 duplicated in different leaves, they will be counted
 multiple times.
 -}
-length : QuadTree a -> Int
+length : QuadTree units coordinates a -> Int
 length quadTree =
     case quadTree of
         Leaf _ _ items ->
@@ -296,11 +171,14 @@ length quadTree =
 
 {-| Insert an item into a quadTree.
 -}
-insert : Bounded a -> QuadTree (Bounded a) -> QuadTree (Bounded a)
+insert :
+    Bounded units coordinates a
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
 insert item quadTree =
     case quadTree of
         Leaf box maxSize items ->
-            if intersectBoundingBoxes item.boundingBox box then
+            if BoundingBox2d.intersects item.boundingBox box then
                 let
                     allItems =
                         Array.push item items
@@ -310,43 +188,40 @@ insert item quadTree =
                             (init quadrant maxSize)
                             allItems
 
-                    quadTreeNE =
-                        subdivideNE box
-
-                    quadTreeNW =
-                        subdivideNW box
-
-                    quadTreeSW =
-                        subdivideSW box
-
-                    quadTreeSE =
-                        subdivideSE box
+                    subQuadrants =
+                        quadrants box
                 in
-                    if Array.length items < maxSize then
-                        Leaf box maxSize (Array.push item items)
-                    else
-                        Node box
-                            (insertNew quadTreeNE)
-                            (insertNew quadTreeNW)
-                            (insertNew quadTreeSW)
-                            (insertNew quadTreeSE)
+                if Array.length items < maxSize then
+                    Leaf box maxSize (Array.push item items)
+
+                else
+                    Node box
+                        (insertNew subQuadrants.northEast)
+                        (insertNew subQuadrants.northWest)
+                        (insertNew subQuadrants.southWest)
+                        (insertNew subQuadrants.southEast)
+
             else
                 quadTree
 
         Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            if intersectBoundingBoxes item.boundingBox box then
+            if BoundingBox2d.intersects item.boundingBox box then
                 Node box
                     (insert item quadTreeNE)
                     (insert item quadTreeNW)
                     (insert item quadTreeSW)
                     (insert item quadTreeSE)
+
             else
                 quadTree
 
 
 {-| Insert an array of items into a quadTree.
 -}
-insertMany : Array.Array (Bounded a) -> QuadTree (Bounded a) -> QuadTree (Bounded a)
+insertMany :
+    Array.Array (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
 insertMany theItems theQuadTree =
     let
         stoppingCondition { items } =
@@ -363,17 +238,17 @@ insertMany theItems theQuadTree =
         returnFunction =
             .quadTree
     in
-        loop { items = theItems, quadTree = theQuadTree }
-            stoppingCondition
-            loopBody
-            returnFunction
+    loop { items = theItems, quadTree = theQuadTree }
+        stoppingCondition
+        loopBody
+        returnFunction
 
 
 {-| Remove an item from a quadTree and return the new quadTree.
 If an item is found in multiple leaves, then the item will
 be removed from all leaves.
 -}
-remove : a -> QuadTree a -> QuadTree a
+remove : a -> QuadTree units coordinates a -> QuadTree units coordinates a
 remove item quadTree =
     case quadTree of
         Leaf box maxSize items ->
@@ -392,14 +267,18 @@ update a single item. This removes the item from the quadTree,
 applies the given updateFunction, and then inserts the updated
 item into the quadTree.
 -}
-update : (Bounded a -> Bounded a) -> Bounded a -> QuadTree (Bounded a) -> QuadTree (Bounded a)
+update :
+    (Bounded units coordinates a -> Bounded units coordinates a)
+    -> Bounded units coordinates a
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
 update updateFunction item quadTree =
     insert (updateFunction item) (remove item quadTree)
 
 
 {-| Get the bounding box of a quadTree.
 -}
-getBoundingBox : QuadTree a -> BoundingBox
+getBoundingBox : QuadTree units coordinates a -> BoundingBox2d units coordinates
 getBoundingBox quadTree =
     case quadTree of
         Leaf box _ _ ->
@@ -411,7 +290,7 @@ getBoundingBox quadTree =
 
 {-| Get the maxSize of a quadTree.
 -}
-getMaxSize : QuadTree a -> Int
+getMaxSize : QuadTree units coordinates a -> Int
 getMaxSize quadTree =
     case quadTree of
         Leaf _ maxSize _ ->
@@ -423,7 +302,7 @@ getMaxSize quadTree =
 
 {-| Get all items from a quadTree. Conserves duplicates.
 -}
-getAllItems : QuadTree a -> Array.Array a
+getAllItems : QuadTree units coordinates a -> Array.Array a
 getAllItems quadTree =
     case quadTree of
         Leaf _ _ items ->
@@ -442,7 +321,9 @@ into an empty quadTree. Useful if the items in
 the quadTree find themselves in the wrong
 leaves.
 -}
-reset : QuadTree (Bounded a) -> QuadTree (Bounded a)
+reset :
+    QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
 reset quadTree =
     insertMany (getAllItems quadTree)
         (init (getBoundingBox quadTree) (getMaxSize quadTree))
@@ -452,12 +333,16 @@ reset quadTree =
 item or would share a leaf with the given item were the item in
 the quadTree. Useful for finding items close to the given item.
 -}
-findItems : Bounded a -> QuadTree (Bounded a) -> Array.Array (Bounded a)
+findItems :
+    Bounded units coordinates a
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> Array.Array (Bounded units coordinates a)
 findItems item quadTree =
     case quadTree of
         Leaf box _ items ->
-            if intersectBoundingBoxes item.boundingBox box then
+            if BoundingBox2d.intersects item.boundingBox box then
                 items
+
             else
                 Array.empty
 
@@ -473,10 +358,14 @@ findItems item quadTree =
 Similar to `findItems` but will return only intersection items, without neighboring items.
 
 -}
-findIntersecting : Bounded a -> QuadTree (Bounded a) -> Array.Array (Bounded a)
+findIntersecting :
+    Bounded units coordinates a
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> Array.Array (Bounded units coordinates a)
 findIntersecting bounded quadTree =
     Array.filter
-        (\listItem -> intersectBoundingBoxes bounded.boundingBox listItem.boundingBox) <|
+        (\listItem -> BoundingBox2d.intersects bounded.boundingBox listItem.boundingBox)
+    <|
         findItems bounded quadTree
 
 
@@ -486,7 +375,7 @@ a useful helper for collision detection and response
 where the input function updates an object after colliding
 it with an array of objects.
 -}
-apply : (a -> Array.Array a -> a) -> QuadTree a -> QuadTree a
+apply : (a -> Array.Array a -> a) -> QuadTree units coordinates a -> QuadTree units coordinates a
 apply f quadTree =
     case quadTree of
         Leaf box maxSize items ->
@@ -503,7 +392,10 @@ apply f quadTree =
 {-| Safe version of apply. Automatically calls reset after applying
 the function on the quadTree.
 -}
-applySafe : (Bounded a -> Array.Array (Bounded a) -> Bounded a) -> QuadTree (Bounded a) -> QuadTree (Bounded a)
+applySafe :
+    (Bounded units coordinates a -> Array.Array (Bounded units coordinates a) -> Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates a)
 applySafe f quadTree =
     reset <| apply f quadTree
 
@@ -516,7 +408,7 @@ after you are done as the quadTree may have items in the
 wrong place. This function doesn't do the clean-up
 automatically. If you want such functionality, use `mapSafe`.
 -}
-map : (a -> b) -> QuadTree a -> QuadTree b
+map : (a -> b) -> QuadTree units coordinates a -> QuadTree units coordinates b
 map f quadTree =
     case quadTree of
         Leaf box maxSize items ->
@@ -533,6 +425,9 @@ map f quadTree =
 {-| Version of `map` where the quadTree is reset
 automatically after applying the function.
 -}
-mapSafe : (Bounded a -> Bounded b) -> QuadTree (Bounded a) -> QuadTree (Bounded b)
+mapSafe :
+    (Bounded units coordinates a -> Bounded units coordinates b)
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> QuadTree units coordinates (Bounded units coordinates b)
 mapSafe f quadTree =
     reset <| map f quadTree
