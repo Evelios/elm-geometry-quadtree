@@ -1,9 +1,8 @@
 module Tests exposing (..)
 
 import Array
-import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, list, string)
-import Test exposing (..)
+import Expect
+import Test exposing (Test, describe, test)
 import QuadTree exposing (boundingBox, emptyQuadTree, findIntersecting, findItems, getAllItems, insert, insertMany, intersectBoundingBoxes, length)
 
 
@@ -11,13 +10,13 @@ toIntervalTest ( ( low1, high1 ), ( low2, high2 ), expected ) =
     let
         title =
             "Interval "
-                ++ toString low1
+                ++ String.fromFloat low1
                 ++ " to "
-                ++ toString high1
+                ++ String.fromFloat high1
                 ++ " and "
-                ++ toString low2
+                ++ String.fromFloat low2
                 ++ " to "
-                ++ toString high2
+                ++ String.fromFloat high2
                 ++ " should "
                 ++ (if expected then
                         "intersect"

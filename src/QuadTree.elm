@@ -83,7 +83,6 @@ module QuadTree
 -}
 
 import Array
-import Trampoline exposing (..)
 
 
 dropIf : (a -> Bool) -> Array.Array a -> Array.Array a
@@ -101,22 +100,12 @@ flippedMap f array =
 
 
 loop : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> b
-loop start condition update return =
-    evaluate <|
-        loop_ start condition update return
-
-
-loop_ : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> Trampoline b
-loop_ start condition update return =
+loop start condition updateFn return =
     case condition start of
         True ->
-            done (return start)
-
+            return start
         False ->
-            jump
-                (\() ->
-                    loop_ (update start) condition update return
-                )
+            loop (updateFn start) condition updateFn return
 
 
 
@@ -284,8 +273,8 @@ a maxSize. The maxSize limits the number of elements
 that each leaf of the QuadTree can hold.
 -}
 emptyQuadTree : BoundingBox -> Int -> QuadTree a
-emptyQuadTree boundingBox maxSize =
-    Leaf boundingBox maxSize Array.empty
+emptyQuadTree theBoundingBox maxSize =
+    Leaf theBoundingBox maxSize Array.empty
 
 
 {-| Find the number of items in a quadTree. If elements are
@@ -295,10 +284,10 @@ multiple times.
 length : QuadTree a -> Int
 length quadTree =
     case quadTree of
-        Leaf box maxSize items ->
+        Leaf _ _ items ->
             Array.length items
 
-        Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
+        Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             length quadTreeNE
                 + length quadTreeNW
                 + length quadTreeSW
@@ -317,7 +306,7 @@ insert item quadTree =
                         Array.push item items
 
                     insertNew quadrant =
-                        Array.foldr (\item quadTree -> insert item quadTree)
+                        Array.foldr (\i qt -> insert i qt)
                             (emptyQuadTree quadrant maxSize)
                             allItems
 
@@ -358,7 +347,7 @@ insert item quadTree =
 {-| Insert an array of items into a quadTree.
 -}
 insertMany : Array.Array (Bounded a) -> QuadTree (Bounded a) -> QuadTree (Bounded a)
-insertMany items quadTree =
+insertMany theItems theQuadTree =
     let
         stoppingCondition { items } =
             Array.get 0 items == Nothing
@@ -374,7 +363,7 @@ insertMany items quadTree =
         returnFunction =
             .quadTree
     in
-        loop { items = items, quadTree = quadTree }
+        loop { items = theItems, quadTree = theQuadTree }
             stoppingCondition
             loopBody
             returnFunction
@@ -437,10 +426,10 @@ getMaxSize quadTree =
 getAllItems : QuadTree a -> Array.Array a
 getAllItems quadTree =
     case quadTree of
-        Leaf box maxSize items ->
+        Leaf _ _ items ->
             items
 
-        Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
+        Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             getAllItems quadTreeNE
                 |> Array.append (getAllItems quadTreeNW)
                 |> Array.append (getAllItems quadTreeSW)
@@ -466,13 +455,13 @@ the quadTree. Useful for finding items close to the given item.
 findItems : Bounded a -> QuadTree (Bounded a) -> Array.Array (Bounded a)
 findItems item quadTree =
     case quadTree of
-        Leaf box maxSize items ->
+        Leaf box _ items ->
             if intersectBoundingBoxes item.boundingBox box then
                 items
             else
                 Array.empty
 
-        Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
+        Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             findItems item quadTreeNE
                 |> Array.append (findItems item quadTreeNW)
                 |> Array.append (findItems item quadTreeSW)
@@ -485,8 +474,10 @@ Similar to `findItems` but will return only intersection items, without neighbor
 
 -}
 findIntersecting : Bounded a -> QuadTree (Bounded a) -> Array.Array (Bounded a)
-findIntersecting ({ boundingBox } as item) quadTree =
-    Array.filter (\listItem -> intersectBoundingBoxes boundingBox listItem.boundingBox) <| findItems item quadTree
+findIntersecting bounded quadTree =
+    Array.filter
+        (\listItem -> intersectBoundingBoxes bounded.boundingBox listItem.boundingBox) <|
+        findItems bounded quadTree
 
 
 {-| Apply a function, that takes an item and an array of items
