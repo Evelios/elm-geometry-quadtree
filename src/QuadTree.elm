@@ -4,7 +4,7 @@ module QuadTree exposing
     , getMaxSize, getBoundingBox, length
     , insert, insertArray, insertList
     , remove
-    , findItems, findIntersecting, toArray, toList
+    , findItems, findIntersecting, toArray, toList, neighborsWithin
     , update
     , apply, applySafe, map, mapSafe
     , reset
@@ -40,7 +40,7 @@ module QuadTree exposing
 
 # Querying
 
-@docs findItems, findIntersecting, toArray, toList
+@docs findItems, findIntersecting, toArray, toList, neighborsWithin
 
 
 # Updating items
@@ -61,7 +61,9 @@ module QuadTree exposing
 
 import Array exposing (Array)
 import BoundingBox2d exposing (BoundingBox2d)
+import EverySet
 import Point2d
+import Quantity exposing (Quantity)
 
 
 dropIf : (a -> Bool) -> Array.Array a -> Array.Array a
@@ -446,3 +448,35 @@ mapSafe :
     -> QuadTree units coordinates (Bounded units coordinates b)
 mapSafe f quadTree =
     reset <| map f quadTree
+
+
+{-| Find all the neighbors that are within a particular distance from an input object.
+-}
+neighborsWithin :
+    Quantity Float units
+    -> Bounded units coordinates a
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> List (Bounded units coordinates a)
+neighborsWithin distance box quadTree =
+    case quadTree of
+        Leaf _ _ items ->
+            items
+                |> Array.filter
+                    (\item ->
+                        not <|
+                            BoundingBox2d.separatedByAtLeast
+                                distance
+                                box.boundingBox
+                                item.boundingBox
+                    )
+                |> Array.toList
+
+        Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
+            List.concat
+                [ neighborsWithin distance box quadTreeNE
+                , neighborsWithin distance box quadTreeNW
+                , neighborsWithin distance box quadTreeSW
+                , neighborsWithin distance box quadTreeSE
+                ]
+                |> EverySet.fromList
+                |> EverySet.toList
