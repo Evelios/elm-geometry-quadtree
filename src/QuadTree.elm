@@ -472,11 +472,24 @@ neighborsWithin distance box quadTree =
                 |> Array.toList
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            List.concat
-                [ neighborsWithin distance box quadTreeNE
-                , neighborsWithin distance box quadTreeNW
-                , neighborsWithin distance box quadTreeSW
-                , neighborsWithin distance box quadTreeSE
-                ]
+            let
+                allQuadrants =
+                    [ quadTreeNE
+                    , quadTreeNW
+                    , quadTreeSW
+                    , quadTreeSE
+                    ]
+            in
+            allQuadrants
+                |> List.filter
+                    (\quad ->
+                        not <|
+                            BoundingBox2d.separatedByAtLeast
+                                distance
+                                box.boundingBox
+                                (getBoundingBox quad)
+                    )
+                |> List.map (neighborsWithin distance box)
+                |> List.concat
                 |> EverySet.fromList
                 |> EverySet.toList
