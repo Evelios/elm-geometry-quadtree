@@ -2,13 +2,12 @@ module QuadTree exposing
     ( QuadTree, init
     , Bounded
     , getMaxSize, getBoundingBox, length
-    , insert
+    , insert, insertArray, insertList
     , remove
-    , update
     , findItems, findIntersecting, toArray, toList
+    , update
     , apply, applySafe, map, mapSafe
     , reset
-    , appendArray, appendList
     )
 
 {-| QuadTree implementation in Elm.
@@ -31,7 +30,7 @@ module QuadTree exposing
 
 # Inserting items
 
-@docs insert, insertMany
+@docs insert, insertArray, insertList
 
 
 # Removing items
@@ -39,14 +38,14 @@ module QuadTree exposing
 @docs remove
 
 
-# Updating items
-
-@docs update
-
-
 # Querying
 
 @docs findItems, findIntersecting, toArray, toList
+
+
+# Updating items
+
+@docs update
 
 
 # Applying functions
@@ -219,11 +218,11 @@ insert item quadTree =
 
 {-| Insert an array of items into a quadTree.
 -}
-appendArray :
+insertArray :
     Array.Array (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
-appendArray theItems theQuadTree =
+insertArray theItems theQuadTree =
     let
         stoppingCondition { items } =
             Array.get 0 items == Nothing
@@ -245,12 +244,12 @@ appendArray theItems theQuadTree =
         returnFunction
 
 
-appendList :
+insertList :
     List (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
-appendList =
-    appendArray << Array.fromList
+insertList =
+    insertArray << Array.fromList
 
 
 {-| Remove an item from a quadTree and return the new quadTree.
@@ -341,7 +340,7 @@ reset :
     QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
 reset quadTree =
-    appendArray (toArray quadTree)
+    insertArray (toArray quadTree)
         (init (getBoundingBox quadTree) (getMaxSize quadTree))
 
 

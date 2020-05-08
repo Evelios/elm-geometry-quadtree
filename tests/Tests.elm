@@ -7,11 +7,11 @@ import Point2d
 import QuadTree
     exposing
         ( Bounded
-        , appendArray
         , findIntersecting
         , findItems
         , init
         , insert
+        , insertArray
         , length
         , toList
         )
@@ -115,7 +115,7 @@ treeLookupTest =
                         ]
 
                     testTree =
-                        appendArray (Array.fromList items) tree
+                        insertArray (Array.fromList items) tree
 
                     searchBox =
                         boundedItem -2 -2 -0.5 -0.5
