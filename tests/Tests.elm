@@ -1,6 +1,5 @@
 module Tests exposing (..)
 
-import Array
 import BoundingBox2d exposing (BoundingBox2d)
 import Expect
 import Point2d
@@ -12,7 +11,7 @@ import QuadTree
         , findItems
         , init
         , insert
-        , insertArray
+        , insertList
         , length
         , toList
         )
@@ -38,6 +37,38 @@ emptyTree =
             boundingBox -10 10 -10 10
     in
     init treeLimits 4
+
+
+sortXthenY : Bounded Unitless coordinates a -> Bounded Unitless coordinates a -> Order
+sortXthenY box1 box2 =
+    let
+        ( x1, y1 ) =
+            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box1.boundingBox
+
+        ( x2, y2 ) =
+            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box2.boundingBox
+    in
+    case x1 == x2 of
+        True ->
+            case y1 == y2 of
+                True ->
+                    EQ
+
+                False ->
+                    case y1 < y2 of
+                        True ->
+                            LT
+
+                        False ->
+                            GT
+
+        False ->
+            case x1 < x2 of
+                True ->
+                    LT
+
+                False ->
+                    GT
 
 
 quadTreeInsertTest : Test
@@ -69,11 +100,14 @@ quadTreeInsertTest =
                         , { boundingBox = boundingBox 0 1 -1 0 }
                         , { boundingBox = boundingBox -1 0 -1 0 }
                         ]
+                            |> List.sortWith sortXthenY
 
                     testTree =
                         List.foldl insert emptyTree boundeds
                 in
-                Expect.equalLists (toList testTree) boundeds
+                toList testTree
+                    |> List.sortWith sortXthenY
+                    |> Expect.equalLists boundeds
         ]
 
 
@@ -92,7 +126,7 @@ treeLookupTest =
                     searchBox =
                         { boundingBox = boundingBox 0.5 0.5 0.5 0.5 }
                 in
-                Expect.equalLists [ bounded ] (Array.toList <| findItems searchBox testTree)
+                Expect.equalLists [ bounded ] <| findItems searchBox testTree
         , test "Find in a multi-level tree" <|
             \_ ->
                 let
@@ -105,12 +139,12 @@ treeLookupTest =
                         ]
 
                     testTree =
-                        insertArray (Array.fromList items) emptyTree
+                        insertList items emptyTree
 
                     searchBox =
                         boundedItem -2 -2 -0.5 -0.5
                 in
-                Expect.equalLists (List.take 1 <| List.reverse items) (Array.toList <| findIntersecting searchBox testTree)
+                Expect.equalLists (List.take 1 <| List.reverse items) <| findIntersecting searchBox testTree
         ]
 
 
@@ -121,7 +155,7 @@ neighborsWithinTest =
             \_ ->
                 let
                     queryItem =
-                        boundedItem 0 1 0 1
+                        boundingBox 0 1 0 1
 
                     result =
                         QuadTree.neighborsWithin (Quantity.float 1) queryItem emptyTree
@@ -137,7 +171,7 @@ neighborsWithinTest =
                         QuadTree.insert item emptyTree
 
                     queryItem =
-                        boundedItem 0 1 0 1
+                        boundingBox 0 1 0 1
 
                     result =
                         QuadTree.neighborsWithin (Quantity.float 1) queryItem tree
@@ -153,7 +187,7 @@ neighborsWithinTest =
                         QuadTree.insert item emptyTree
 
                     queryItem =
-                        boundedItem 0 1 0 1
+                        boundingBox 0 1 0 1
 
                     result =
                         QuadTree.neighborsWithin (Quantity.float 2) queryItem tree
@@ -179,7 +213,7 @@ neighborsWithinTest =
                             |> QuadTree.insertList distantItems
 
                     queryItem =
-                        boundedItem 1 2 -3 -2
+                        boundingBox 1 2 -3 -2
 
                     result =
                         QuadTree.neighborsWithin (Quantity.float 1.5) queryItem tree

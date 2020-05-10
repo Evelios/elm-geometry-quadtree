@@ -2,9 +2,9 @@ module QuadTree exposing
     ( QuadTree, init
     , Bounded
     , getMaxSize, getBoundingBox, length
-    , insert, insertArray, insertList
+    , insert, insertList
     , remove
-    , findItems, findIntersecting, toArray, toList, neighborsWithin
+    , findItems, findIntersecting, toList, neighborsWithin
     , update
     , apply, applySafe, map, mapSafe
     , reset
@@ -30,7 +30,7 @@ module QuadTree exposing
 
 # Inserting items
 
-@docs insert, insertArray, insertList
+@docs insert, insertList
 
 
 # Removing items
@@ -40,7 +40,7 @@ module QuadTree exposing
 
 # Querying
 
-@docs findItems, findIntersecting, toArray, toList, neighborsWithin
+@docs findItems, findIntersecting, toList, neighborsWithin
 
 
 # Updating items
@@ -59,25 +59,24 @@ module QuadTree exposing
 
 -}
 
-import Array exposing (Array)
 import BoundingBox2d exposing (BoundingBox2d)
 import EverySet
 import Point2d
 import Quantity exposing (Quantity)
 
 
-dropIf : (a -> Bool) -> Array.Array a -> Array.Array a
+dropIf : (a -> Bool) -> List a -> List a
 dropIf predicate =
-    Array.filter (not << predicate)
+    List.filter (not << predicate)
 
 
-flippedMap : (a -> Array.Array a -> a) -> Array.Array a -> Array.Array a
+flippedMap : (a -> List a -> a) -> List a -> List a
 flippedMap f array =
     let
         g y x =
             f x y
     in
-    Array.map (g array) array
+    List.map (g array) array
 
 
 loop : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> b
@@ -141,7 +140,7 @@ keeps track of the maximum number of items that
 can be inserted in each leaf.
 -}
 type QuadTree units coordinates a
-    = Leaf (BoundingBox2d units coordinates) Int (Array.Array a)
+    = Leaf (BoundingBox2d units coordinates) Int (List a)
     | Node (BoundingBox2d units coordinates) (QuadTree units coordinates a) (QuadTree units coordinates a) (QuadTree units coordinates a) (QuadTree units coordinates a)
 
 
@@ -151,7 +150,7 @@ that each leaf of the QuadTree can hold.
 -}
 init : BoundingBox2d units coordinates -> Int -> QuadTree units coordinates a
 init theBoundingBox maxSize =
-    Leaf theBoundingBox maxSize Array.empty
+    Leaf theBoundingBox maxSize []
 
 
 {-| Find the number of items in a quadTree. If elements are
@@ -162,13 +161,12 @@ length : QuadTree units coordinates a -> Int
 length quadTree =
     case quadTree of
         Leaf _ _ items ->
-            Array.length items
+            List.length items
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            length quadTreeNE
-                + length quadTreeNW
-                + length quadTreeSW
-                + length quadTreeSE
+            List.foldl (\quad len -> len + length quad)
+                0
+                [ quadTreeNE, quadTreeNW, quadTreeSW, quadTreeSE ]
 
 
 {-| Insert an item into a quadTree.
@@ -177,24 +175,25 @@ insert :
     Bounded units coordinates a
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
-insert item quadTree =
-    case quadTree of
+insert theItem theQuadTree =
+    case theQuadTree of
         Leaf box maxSize items ->
-            if BoundingBox2d.intersects item.boundingBox box then
+            if BoundingBox2d.intersects theItem.boundingBox box then
                 let
                     allItems =
-                        Array.push item items
+                        theItem :: items
 
                     insertNew quadrant =
-                        Array.foldr (\i qt -> insert i qt)
-                            (init quadrant maxSize)
-                            allItems
+                        allItems
+                            |> List.foldl
+                                (\item quadTree -> insert item quadTree)
+                                (init quadrant maxSize)
 
                     subQuadrants =
                         quadrants box
                 in
-                if Array.length items < maxSize then
-                    Leaf box maxSize (Array.push item items)
+                if List.length items < maxSize then
+                    Leaf box maxSize (theItem :: items)
 
                 else
                     Node box
@@ -204,54 +203,26 @@ insert item quadTree =
                         (insertNew subQuadrants.southEast)
 
             else
-                quadTree
+                theQuadTree
 
         Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            if BoundingBox2d.intersects item.boundingBox box then
+            if BoundingBox2d.intersects theItem.boundingBox box then
                 Node box
-                    (insert item quadTreeNE)
-                    (insert item quadTreeNW)
-                    (insert item quadTreeSW)
-                    (insert item quadTreeSE)
+                    (insert theItem quadTreeNE)
+                    (insert theItem quadTreeNW)
+                    (insert theItem quadTreeSW)
+                    (insert theItem quadTreeSE)
 
             else
-                quadTree
-
-
-{-| Insert an array of items into a quadTree.
--}
-insertArray :
-    Array.Array (Bounded units coordinates a)
-    -> QuadTree units coordinates (Bounded units coordinates a)
-    -> QuadTree units coordinates (Bounded units coordinates a)
-insertArray theItems theQuadTree =
-    let
-        stoppingCondition { items } =
-            Array.get 0 items == Nothing
-
-        loopBody ({ items, quadTree } as variables) =
-            case Array.get 0 items of
-                Nothing ->
-                    variables
-
-                Just item ->
-                    { items = Array.slice 1 (Array.length items) items, quadTree = insert item quadTree }
-
-        returnFunction =
-            .quadTree
-    in
-    loop { items = theItems, quadTree = theQuadTree }
-        stoppingCondition
-        loopBody
-        returnFunction
+                theQuadTree
 
 
 insertList :
     List (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
-insertList =
-    insertArray << Array.fromList
+insertList theItems theQuadtree =
+    List.foldl insert theQuadtree theItems
 
 
 {-| Remove an item from a quadTree and return the new quadTree.
@@ -312,24 +283,19 @@ getMaxSize quadTree =
 
 {-| Get all items from a quadTree. Conserves duplicates.
 -}
-toArray : QuadTree units coordinates a -> Array.Array a
-toArray quadTree =
+toList : QuadTree units coordinates a -> List a
+toList quadTree =
     case quadTree of
         Leaf _ _ items ->
             items
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
-            toArray quadTreeNE
-                |> Array.append (toArray quadTreeNW)
-                |> Array.append (toArray quadTreeSW)
-                |> Array.append (toArray quadTreeSE)
-
-
-{-| Get all items from a quadTree. Conserves duplicates.
--}
-toList : QuadTree units coordinates a -> List a
-toList =
-    toArray >> Array.toList
+            toList quadTreeNE
+                |> List.append (toList quadTreeNW)
+                |> List.append (toList quadTreeSW)
+                |> List.append (toList quadTreeSE)
+                |> EverySet.fromList
+                |> EverySet.toList
 
 
 {-| Reset a quadTree. This function gets all items
@@ -342,7 +308,7 @@ reset :
     QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
 reset quadTree =
-    insertArray (toArray quadTree)
+    insertList (toList quadTree)
         (init (getBoundingBox quadTree) (getMaxSize quadTree))
 
 
@@ -353,7 +319,7 @@ the quadTree. Useful for finding items close to the given item.
 findItems :
     Bounded units coordinates a
     -> QuadTree units coordinates (Bounded units coordinates a)
-    -> Array.Array (Bounded units coordinates a)
+    -> List (Bounded units coordinates a)
 findItems item quadTree =
     case quadTree of
         Leaf box _ items ->
@@ -361,13 +327,13 @@ findItems item quadTree =
                 items
 
             else
-                Array.empty
+                []
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             findItems item quadTreeNE
-                |> Array.append (findItems item quadTreeNW)
-                |> Array.append (findItems item quadTreeSW)
-                |> Array.append (findItems item quadTreeSE)
+                |> List.append (findItems item quadTreeNW)
+                |> List.append (findItems item quadTreeSW)
+                |> List.append (findItems item quadTreeSE)
 
 
 {-| Find all items that actually intersect with the given item.
@@ -378,9 +344,9 @@ Similar to `findItems` but will return only intersection items, without neighbor
 findIntersecting :
     Bounded units coordinates a
     -> QuadTree units coordinates (Bounded units coordinates a)
-    -> Array.Array (Bounded units coordinates a)
+    -> List (Bounded units coordinates a)
 findIntersecting bounded quadTree =
-    Array.filter
+    List.filter
         (\listItem -> BoundingBox2d.intersects bounded.boundingBox listItem.boundingBox)
     <|
         findItems bounded quadTree
@@ -392,7 +358,7 @@ a useful helper for collision detection and response
 where the input function updates an object after colliding
 it with an array of objects.
 -}
-apply : (a -> Array.Array a -> a) -> QuadTree units coordinates a -> QuadTree units coordinates a
+apply : (a -> List a -> a) -> QuadTree units coordinates a -> QuadTree units coordinates a
 apply f quadTree =
     case quadTree of
         Leaf box maxSize items ->
@@ -410,7 +376,7 @@ apply f quadTree =
 the function on the quadTree.
 -}
 applySafe :
-    (Bounded units coordinates a -> Array.Array (Bounded units coordinates a) -> Bounded units coordinates a)
+    (Bounded units coordinates a -> List (Bounded units coordinates a) -> Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
 applySafe f quadTree =
@@ -429,7 +395,7 @@ map : (a -> b) -> QuadTree units coordinates a -> QuadTree units coordinates b
 map f quadTree =
     case quadTree of
         Leaf box maxSize items ->
-            Leaf box maxSize (Array.map f items)
+            Leaf box maxSize (List.map f items)
 
         Node box quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             Node box
@@ -454,22 +420,21 @@ mapSafe f quadTree =
 -}
 neighborsWithin :
     Quantity Float units
-    -> Bounded units coordinates a
+    -> BoundingBox2d units coordinates
     -> QuadTree units coordinates (Bounded units coordinates a)
     -> List (Bounded units coordinates a)
 neighborsWithin distance box quadTree =
     case quadTree of
         Leaf _ _ items ->
             items
-                |> Array.filter
+                |> List.filter
                     (\item ->
                         not <|
                             BoundingBox2d.separatedByAtLeast
                                 distance
-                                box.boundingBox
+                                box
                                 item.boundingBox
                     )
-                |> Array.toList
 
         Node _ quadTreeNE quadTreeNW quadTreeSW quadTreeSE ->
             let
@@ -486,7 +451,7 @@ neighborsWithin distance box quadTree =
                         not <|
                             BoundingBox2d.separatedByAtLeast
                                 distance
-                                box.boundingBox
+                                box
                                 (getBoundingBox quad)
                     )
                 |> List.map (neighborsWithin distance box)
