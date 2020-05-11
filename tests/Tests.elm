@@ -7,91 +7,45 @@ import QuadTree
     exposing
         ( Bounded
         , QuadTree
-        , findIntersecting
-        , findItems
-        , init
-        , insert
-        , insertList
-        , length
-        , toList
         )
 import Quantity exposing (Unitless)
 import Test exposing (Test, describe, test)
 
 
-boundedItem minX maxX minY maxY =
-    { boundingBox = boundingBox minX maxX minY maxY }
 
-
-boundingBox : Float -> Float -> Float -> Float -> BoundingBox2d Unitless coordinates
-boundingBox minX maxX minY maxY =
-    BoundingBox2d.from
-        (Point2d.unitless minX minY)
-        (Point2d.unitless maxX maxY)
-
-
-emptyTree : QuadTree Unitless coordinates (Bounded Unitless coordinates a)
-emptyTree =
-    let
-        treeLimits =
-            boundingBox -10 10 -10 10
-    in
-    init treeLimits 4
-
-
-sortXthenY : Bounded Unitless coordinates a -> Bounded Unitless coordinates a -> Order
-sortXthenY box1 box2 =
-    let
-        ( x1, y1 ) =
-            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box1.boundingBox
-
-        ( x2, y2 ) =
-            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box2.boundingBox
-    in
-    case x1 == x2 of
-        True ->
-            case y1 == y2 of
-                True ->
-                    EQ
-
-                False ->
-                    case y1 < y2 of
-                        True ->
-                            LT
-
-                        False ->
-                            GT
-
-        False ->
-            case x1 < x2 of
-                True ->
-                    LT
-
-                False ->
-                    GT
+---- Tests
 
 
 quadTreeInsertTest : Test
 quadTreeInsertTest =
     describe "Insert to Quad Tree"
-        [ test "insert to empty" <|
+        [ test "Valid after insert to empty" <|
             \_ ->
                 let
                     bounded =
                         { boundingBox = boundingBox 0 1 0 1 }
                 in
-                Expect.equal (length (insert bounded emptyTree)) 1
-        , test "find in 1 element quad tree" <|
+                QuadTree.insert bounded emptyTree
+                    |> QuadTree.isValid
+                    |> Expect.ok
+        , test "Insert single element length is 1" <|
+            \_ ->
+                let
+                    bounded =
+                        { boundingBox = boundingBox 0 1 0 1 }
+                in
+                Expect.equal (QuadTree.length (QuadTree.insert bounded emptyTree)) 1
+        , test "Inserted element to list returns the inserted item" <|
             \_ ->
                 let
                     bounded =
                         { boundingBox = boundingBox 0 1 0 1 }
 
                     treeWithElements =
-                        insert bounded emptyTree
+                        QuadTree.insert bounded emptyTree
                 in
-                Expect.equalLists (toList treeWithElements) [ bounded ]
-        , test "Add multiple items" <|
+                Expect.equalLists (QuadTree.toList treeWithElements) [ bounded ]
+        , test "Multi-level tree should be valid" <|
             \_ ->
                 let
                     boundeds =
@@ -99,13 +53,30 @@ quadTreeInsertTest =
                         , { boundingBox = boundingBox -1 0 0 1 }
                         , { boundingBox = boundingBox 0 1 -1 0 }
                         , { boundingBox = boundingBox -1 0 -1 0 }
+                        , { boundingBox = boundingBox 1 2 1 2 }
                         ]
                             |> List.sortWith sortXthenY
 
                     testTree =
-                        List.foldl insert emptyTree boundeds
+                        List.foldl QuadTree.insert emptyTree boundeds
                 in
-                toList testTree
+                Expect.ok <| QuadTree.isValid testTree
+        , test "Multi-level tree should return inserted items" <|
+            \_ ->
+                let
+                    boundeds =
+                        [ { boundingBox = boundingBox 0 1 0 1 }
+                        , { boundingBox = boundingBox -1 0 0 1 }
+                        , { boundingBox = boundingBox 0 1 -1 0 }
+                        , { boundingBox = boundingBox -1 0 -1 0 }
+                        , { boundingBox = boundingBox 1 2 1 2 }
+                        ]
+                            |> List.sortWith sortXthenY
+
+                    testTree =
+                        List.foldl QuadTree.insert emptyTree boundeds
+                in
+                QuadTree.toList testTree
                     |> List.sortWith sortXthenY
                     |> Expect.equalLists boundeds
         ]
@@ -121,12 +92,12 @@ treeLookupTest =
                         { boundingBox = boundingBox 0 1 0 1 }
 
                     testTree =
-                        insert bounded emptyTree
+                        QuadTree.insert bounded emptyTree
 
                     searchBox =
                         { boundingBox = boundingBox 0.5 0.5 0.5 0.5 }
                 in
-                Expect.equalLists [ bounded ] <| findItems searchBox testTree
+                Expect.equalLists [ bounded ] <| QuadTree.findItems searchBox testTree
         , test "Find in a multi-level tree" <|
             \_ ->
                 let
@@ -139,12 +110,13 @@ treeLookupTest =
                         ]
 
                     testTree =
-                        insertList items emptyTree
+                        QuadTree.insertList items emptyTree
 
                     searchBox =
                         boundedItem -2 -2 -0.5 -0.5
                 in
-                Expect.equalLists (List.take 1 <| List.reverse items) <| findIntersecting searchBox testTree
+                QuadTree.findIntersecting searchBox testTree
+                    |> Expect.equalLists (List.take 1 (List.reverse items))
         ]
 
 
@@ -200,6 +172,7 @@ neighborsWithinTest =
                         [ boundedItem -1 0 -2 -1
                         , boundedItem 2 4 -1 0
                         ]
+                            |> List.sortWith sortXthenY
 
                     distantItems =
                         [ boundedItem 0 1 0 1
@@ -217,6 +190,63 @@ neighborsWithinTest =
 
                     result =
                         QuadTree.neighborsWithin (Quantity.float 1.5) queryItem tree
+                            |> List.sortWith sortXthenY
                 in
                 Expect.equalLists closeItems result
         ]
+
+
+
+---- Helper Functions
+
+
+boundedItem minX maxX minY maxY =
+    { boundingBox = boundingBox minX maxX minY maxY }
+
+
+boundingBox : Float -> Float -> Float -> Float -> BoundingBox2d Unitless coordinates
+boundingBox minX maxX minY maxY =
+    BoundingBox2d.from
+        (Point2d.unitless minX minY)
+        (Point2d.unitless maxX maxY)
+
+
+emptyTree : QuadTree Unitless coordinates (Bounded Unitless coordinates a)
+emptyTree =
+    let
+        treeLimits =
+            boundingBox -10 10 -10 10
+    in
+    QuadTree.init treeLimits 4
+
+
+sortXthenY : Bounded Unitless coordinates a -> Bounded Unitless coordinates a -> Order
+sortXthenY box1 box2 =
+    let
+        ( x1, y1 ) =
+            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box1.boundingBox
+
+        ( x2, y2 ) =
+            Point2d.toTuple Quantity.toFloat <| BoundingBox2d.centerPoint box2.boundingBox
+    in
+    case x1 == x2 of
+        True ->
+            case y1 == y2 of
+                True ->
+                    EQ
+
+                False ->
+                    case y1 < y2 of
+                        True ->
+                            LT
+
+                        False ->
+                            GT
+
+        False ->
+            case x1 < x2 of
+                True ->
+                    LT
+
+                False ->
+                    GT
