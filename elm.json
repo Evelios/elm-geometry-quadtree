@@ -1,6 +1,6 @@
 {
     "type": "package",
-    "name": "evelios/elm-geometry-quadtree",
+    "name": "Evelios/elm-geometry-quadtree",
     "summary": "QuadTree implementation in Elm",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
