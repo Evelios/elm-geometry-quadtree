@@ -1,11 +1,12 @@
 module QuadTree exposing
     ( QuadTree, init
     , Bounded
-    , getMaxSize, getBoundingBox, length
+    , length, getMaxSize, getBoundingBox
     , insert, insertList
     , remove
-    , findItems, findIntersecting, toList, neighborsWithin
     , update
+    , findItems, findIntersecting, neighborsWithin
+    , toList
     , apply, applySafe, map, mapSafe
     , reset
     , isValid
@@ -26,27 +27,24 @@ module QuadTree exposing
 
 # Properties
 
-@docs getMaxSize, getBoundingBox, length
+@docs length, getMaxSize, getBoundingBox
 
 
-# Inserting items
+# Modification
 
 @docs insert, insertList
-
-
-# Removing items
-
 @docs remove
+@docs update
 
 
 # Querying
 
-@docs findItems, findIntersecting, toList, neighborsWithin
+@docs findItems, findIntersecting, neighborsWithin
 
 
-# Updating items
+## Accessing Elements
 
-@docs update
+@docs toList
 
 
 # Applying functions
@@ -63,7 +61,6 @@ module QuadTree exposing
 
 @docs isValid
 
-
 -}
 
 import BoundingBox2d exposing (BoundingBox2d)
@@ -73,32 +70,41 @@ import Quantity exposing (Quantity)
 import Result.Extra
 
 
-dropIf : (a -> Bool) -> List a -> List a
-dropIf predicate =
-    List.filter (not << predicate)
+
+-- Types
 
 
-flippedMap : (a -> List a -> a) -> List a -> List a
-flippedMap f array =
-    let
-        g y x =
-            f x y
-    in
-    List.map (g array) array
+{-| Extend this record type in order to use the QuadTree.
+-}
+type alias Bounded units coordinates a =
+    { a | boundingBox : BoundingBox2d units coordinates }
 
 
-loop : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> b
-loop start condition updateFn return =
-    case condition start of
-        True ->
-            return start
-
-        False ->
-            loop (updateFn start) condition updateFn return
-
+{-| QuadTree type. Keeps its elements in the leaves and
+keeps track of the maximum number of items that
+can be inserted in each leaf.
+-}
+type QuadTree units coordinates a
+    = Leaf (BoundingBox2d units coordinates) Int (List a)
+    | Node (BoundingBox2d units coordinates) (List (QuadTree units coordinates a))
 
 
---------
+type Error
+    = LeafItemsExceedsMaxSize
+    | ItemsInWrongLeaves
+
+
+{-| Construct an empty QuadTree given a bounding box and
+a maxSize. The maxSize limits the number of elements
+that each leaf of the QuadTree can hold.
+-}
+init : BoundingBox2d units coordinates -> Int -> QuadTree units coordinates a
+init theBoundingBox maxSize =
+    Leaf theBoundingBox maxSize []
+
+
+
+-- Quadrants
 
 
 type alias Quadrants units coordinates =
@@ -126,63 +132,35 @@ quadrants box =
 
 
 
----------
+-- Helper Functions
 
 
-{-| Extend this record type in order to use the QuadTree.
--}
-type alias Bounded units coordinates a =
-    { a | boundingBox : BoundingBox2d units coordinates }
+dropIf : (a -> Bool) -> List a -> List a
+dropIf predicate =
+    List.filter (not << predicate)
 
 
-{-| QuadTree type. Keeps its elements in the leaves and
-keeps track of the maximum number of items that
-can be inserted in each leaf.
--}
-type QuadTree units coordinates a
-    = Leaf (BoundingBox2d units coordinates) Int (List a)
-    | Node (BoundingBox2d units coordinates) (List (QuadTree units coordinates a))
+flippedMap : (a -> List a -> a) -> List a -> List a
+flippedMap f array =
+    let
+        g y x =
+            f x y
+    in
+    List.map (g array) array
 
 
-type Error
-    = LeafItemsExceedsMaxSize
-    | ItemsInWrongLeaves
+loop : a -> (a -> Bool) -> (a -> a) -> (a -> b) -> b
+loop start condition updateFn return =
+    case condition start of
+        True ->
+            return start
+
+        False ->
+            loop (updateFn start) condition updateFn return
 
 
-{-|-}
-isValid :
-    QuadTree units coordinates (Bounded units coordinates a)
-    -> Result Error ()
-isValid quadTree =
-    case quadTree of
-        Leaf box maxSize items ->
-            if maxSize < List.length items then
-                Err LeafItemsExceedsMaxSize
 
-            else if
-                not <|
-                    List.all
-                        (\item -> BoundingBox2d.intersects box item.boundingBox)
-                        items
-            then
-                Err ItemsInWrongLeaves
-
-            else
-                Ok ()
-
-        Node _ theQuadrants ->
-            List.map isValid theQuadrants
-                |> Result.Extra.combine
-                |> Result.map (\_ -> ())
-
-
-{-| Construct an empty QuadTree given a bounding box and
-a maxSize. The maxSize limits the number of elements
-that each leaf of the QuadTree can hold.
--}
-init : BoundingBox2d units coordinates -> Int -> QuadTree units coordinates a
-init theBoundingBox maxSize =
-    Leaf theBoundingBox maxSize []
+-- Properties
 
 
 {-| Find the number of items in a quadTree. If elements are
@@ -197,6 +175,39 @@ length quadTree =
 
         Node _ quadTrees ->
             List.foldl (\quad len -> len + length quad) 0 quadTrees
+
+
+{-| Get the bounding box of a quadTree.
+-}
+getBoundingBox : QuadTree units coordinates a -> BoundingBox2d units coordinates
+getBoundingBox quadTree =
+    case quadTree of
+        Leaf box _ _ ->
+            box
+
+        Node box _ ->
+            box
+
+
+{-| Get the maxSize of a quadTree.
+-}
+getMaxSize : QuadTree units coordinates a -> Int
+getMaxSize quadTree =
+    case quadTree of
+        Leaf _ maxSize _ ->
+            maxSize
+
+        Node _ quadrant ->
+            case List.head quadrant of
+                Just quadrantItem ->
+                    getMaxSize quadrantItem
+
+                Nothing ->
+                    0
+
+
+
+-- Modification
 
 
 {-| Insert an item into a quadTree.
@@ -240,7 +251,7 @@ insert newItems theQuadTree =
                 theQuadTree
 
 
-{-|-}
+{-| -}
 insertList :
     List (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
@@ -279,63 +290,8 @@ update updateFunction item quadTree =
     insert (updateFunction item) (remove item quadTree)
 
 
-{-| Get the bounding box of a quadTree.
--}
-getBoundingBox : QuadTree units coordinates a -> BoundingBox2d units coordinates
-getBoundingBox quadTree =
-    case quadTree of
-        Leaf box _ _ ->
-            box
 
-        Node box _ ->
-            box
-
-
-{-| Get the maxSize of a quadTree.
--}
-getMaxSize : QuadTree units coordinates a -> Int
-getMaxSize quadTree =
-    case quadTree of
-        Leaf _ maxSize _ ->
-            maxSize
-
-        Node _ quadrant ->
-            case List.head quadrant of
-                Just quadrantItem ->
-                    getMaxSize quadrantItem
-
-                Nothing ->
-                    0
-
-
-{-| Get all items from a quadTree. Conserves duplicates.
--}
-toList : QuadTree units coordinates a -> List a
-toList quadTree =
-    case quadTree of
-        Leaf _ _ items ->
-            items
-
-        Node _ theQuadrants ->
-            theQuadrants
-                |> List.map toList
-                |> List.concat
-                |> EverySet.fromList
-                |> EverySet.toList
-
-
-{-| Reset a quadTree. This function gets all items
-in a quadTree and pours them
-into an empty quadTree. Useful if the items in
-the quadTree find themselves in the wrong
-leaves.
--}
-reset :
-    QuadTree units coordinates (Bounded units coordinates a)
-    -> QuadTree units coordinates (Bounded units coordinates a)
-reset quadTree =
-    insertList (toList quadTree)
-        (init (getBoundingBox quadTree) (getMaxSize quadTree))
+-- Query
 
 
 {-| Find all items in the quadTree which share a leaf with the given
@@ -375,6 +331,62 @@ findIntersecting bounded quadTree =
         (\listItem -> BoundingBox2d.intersects bounded.boundingBox listItem.boundingBox)
     <|
         findItems bounded quadTree
+
+
+{-| Find all the neighbors that are within a particular distance from an input object.
+-}
+neighborsWithin :
+    Quantity Float units
+    -> BoundingBox2d units coordinates
+    -> QuadTree units coordinates (Bounded units coordinates a)
+    -> List (Bounded units coordinates a)
+neighborsWithin distance box quadTree =
+    case quadTree of
+        Leaf _ _ items ->
+            items
+                |> List.filter
+                    (\item ->
+                        not <|
+                            BoundingBox2d.separatedByAtLeast
+                                distance
+                                box
+                                item.boundingBox
+                    )
+
+        Node _ theQuadrants ->
+            theQuadrants
+                |> List.filter
+                    (\quad ->
+                        not <|
+                            BoundingBox2d.separatedByAtLeast
+                                distance
+                                box
+                                (getBoundingBox quad)
+                    )
+                |> List.map (neighborsWithin distance box)
+                |> List.concat
+                |> EverySet.fromList
+                |> EverySet.toList
+
+
+{-| Get all items from a quadTree. Conserves duplicates.
+-}
+toList : QuadTree units coordinates a -> List a
+toList quadTree =
+    case quadTree of
+        Leaf _ _ items ->
+            items
+
+        Node _ theQuadrants ->
+            theQuadrants
+                |> List.map toList
+                |> List.concat
+                |> EverySet.fromList
+                |> EverySet.toList
+
+
+
+-- Applying Functions
 
 
 {-| Apply a function, that takes an item and an array of items
@@ -437,37 +449,50 @@ mapSafe f quadTree =
     reset <| map f quadTree
 
 
-{-| Find all the neighbors that are within a particular distance from an input object.
+
+-- Reset
+
+
+{-| Reset a quadTree. This function gets all items
+in a quadTree and pours them
+into an empty quadTree. Useful if the items in
+the quadTree find themselves in the wrong
+leaves.
 -}
-neighborsWithin :
-    Quantity Float units
-    -> BoundingBox2d units coordinates
+reset :
+    QuadTree units coordinates (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
-    -> List (Bounded units coordinates a)
-neighborsWithin distance box quadTree =
+reset quadTree =
+    insertList (toList quadTree)
+        (init (getBoundingBox quadTree) (getMaxSize quadTree))
+
+
+
+-- Testing
+
+
+{-| -}
+isValid :
+    QuadTree units coordinates (Bounded units coordinates a)
+    -> Result Error ()
+isValid quadTree =
     case quadTree of
-        Leaf _ _ items ->
-            items
-                |> List.filter
-                    (\item ->
-                        not <|
-                            BoundingBox2d.separatedByAtLeast
-                                distance
-                                box
-                                item.boundingBox
-                    )
+        Leaf box maxSize items ->
+            if maxSize < List.length items then
+                Err LeafItemsExceedsMaxSize
+
+            else if
+                not <|
+                    List.all
+                        (\item -> BoundingBox2d.intersects box item.boundingBox)
+                        items
+            then
+                Err ItemsInWrongLeaves
+
+            else
+                Ok ()
 
         Node _ theQuadrants ->
-            theQuadrants
-                |> List.filter
-                    (\quad ->
-                        not <|
-                            BoundingBox2d.separatedByAtLeast
-                                distance
-                                box
-                                (getBoundingBox quad)
-                    )
-                |> List.map (neighborsWithin distance box)
-                |> List.concat
-                |> EverySet.fromList
-                |> EverySet.toList
+            List.map isValid theQuadrants
+                |> Result.Extra.combine
+                |> Result.map (\_ -> ())
