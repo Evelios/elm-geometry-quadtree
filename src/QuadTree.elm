@@ -63,6 +63,7 @@ module QuadTree exposing
 
 @docs isValid
 
+
 -}
 
 import BoundingBox2d exposing (BoundingBox2d)
@@ -148,6 +149,7 @@ type Error
     | ItemsInWrongLeaves
 
 
+{-|-}
 isValid :
     QuadTree units coordinates (Bounded units coordinates a)
     -> Result Error ()
@@ -238,6 +240,7 @@ insert newItems theQuadTree =
                 theQuadTree
 
 
+{-|-}
 insertList :
     List (Bounded units coordinates a)
     -> QuadTree units coordinates (Bounded units coordinates a)
